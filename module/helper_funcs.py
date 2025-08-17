@@ -41,10 +41,20 @@ def read_stations_metadata(nc_files):
             'Percentage Complete (from file)': completeness
             
         })
-
+                
         ds.close()
 
+    # Make the dataframe
     station_data_df = pd.DataFrame(station_info)
+    
+    # Numericalise the numerical variables
+    station_data_df['Percentage Complete (from file)'] = pd.to_numeric(station_data_df['Percentage Complete (from file)'], errors='coerce')
+    station_data_df['Percentage Complete (from file)'] = station_data_df['Percentage Complete (from file)'].fillna(0)
+    station_data_df['Start Year'] = pd.to_numeric(station_data_df['Start Year'], errors='coerce')
+    station_data_df['End Year'] = pd.to_numeric(station_data_df['End Year'], errors='coerce')
+
+    # Compute Record Length (in years)
+    station_data_df['Record Length'] = station_data_df['End Year'] - station_data_df['Start Year'] + 1
 
     return station_data_df
 
