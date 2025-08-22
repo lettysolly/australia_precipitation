@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import netCDF4 as nc
 from datetime import datetime
+import xarray as xr
 
 
 # function for reading station metadata into a pandas df:
@@ -101,7 +102,7 @@ def build_rain_dataframe(stations, nc_dir, state_abbrev, min_rain=0.01):
         times = [datetime(t.year, t.month, t.day, t.hour, t.minute, t.second) for t in times]
         
         # Rain variable
-        rain = ds.variables['prcp'][:]
+        rain = ds.variables['prcp_inst'][:]
         
         # Filter out small rainfall values
         rain = pd.Series(rain)
@@ -120,4 +121,50 @@ def build_rain_dataframe(stations, nc_dir, state_abbrev, min_rain=0.01):
     df_all = df_all.sort_index()
     
     return df_all
+
+
+# Function for summing rainfall either on daily or yearly timescale
+
+def rainfall_sum(nc_files, timescale='yearly'):
+    """
+    Calculate rainfall sums from half-hourly station NetCDF files.
+
+    Arguments: 
+    - nc_files: list of NetCDF file paths
+    - timescale: 'yearly' or 'daily'
+    """
+    data = {}
+
+    for file in nc_files:
+        ds = xr.open_dataset(file)
+        rain = ds["prcp_inst"]
+
+        # Convert to pandas with datetime index
+        df = rain.to_pandas()
+        df.index = pd.to_datetime(df.index)
+
+        # Resample to daily totals first
+        daily = df.resample("D").sum(min_count=1)
+
+        if timescale == 'daily':
+            out = daily
+        elif timescale == 'yearly':
+            yearly = daily.resample("YE").sum(min_count=1)
+            yearly.index = yearly.index.year
+            out = pd.Series(yearly.squeeze(), index=yearly.index)
+        else:
+            raise ValueError("timescale must be 'daily' or 'yearly'")
+
+        # Station ID
+        station_id = ds.attrs.get("Station_Number")
+        data[station_id] = out
+
+        ds.close()
+
+    # Combine into one DataFrame
+    combined_df = pd.concat(data, axis=1)
+    combined_df = combined_df.sort_index()
+    return combined_df
+
+
 
